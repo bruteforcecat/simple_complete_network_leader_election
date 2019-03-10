@@ -23,9 +23,9 @@ defmodule Scnle.Node do
           }
   end
 
-  @spec get_role(node()) :: State.node_status()
+  @spec get_role(node()) :: node_role()
   def get_role(node) do
-    if node != nil and get_leader(node) == node do
+    if get_leader(node) == node do
       :leader
     else
       :follower
