@@ -52,6 +52,23 @@ defmodule ScnleTest do
     assert call_node(node2, Scnle.Node, :get_leader, []) == node2
   end
 
+  test "leader leave will cause election", %{nodes: [node1]} do
+    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
+    call_node(node1, Scnle.Node, :start_link, [])
+    call_node(node2, Scnle.Node, :start_link, [])
+    wait_until_leader_elected([node1, node2])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node2
+    assert call_node(node2, Scnle.Node, :get_leader, []) == node2
+
+    stop_node(node2)
+    wait_until_leader_elected([node1])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node1
+  end
+
+  defp stop_node(node) do
+    ScnleTest.Cluster.stop_node(node)
+  end
+
   defp call_node(node, m, f, a) do
     :rpc.block_call(node, m, f, a)
   end

@@ -34,7 +34,7 @@ defmodule Scnle.Node do
 
   @spec get_leader(node()) :: node() | nil
   def get_leader(node \\ Node.self()) do
-    GenServer.call({ __MODULE__, node}, :get_leader)
+    GenServer.call({__MODULE__, node}, :get_leader)
   end
 
   def start_link(opts \\ []) do
@@ -63,6 +63,8 @@ defmodule Scnle.Node do
     peers = get_all_peers()
     # notify_peers_join(peers)
     IO.inspect(peers, label: "peers")
+
+    schedule_next_tick()
 
     state =
       start_election(%State{
@@ -114,6 +116,8 @@ defmodule Scnle.Node do
   end
 
   defp send_message(node, message) when is_atom(node) do
+    IO.inspect(message, label: "message:")
+    IO.inspect(node, label: "node:")
     GenServer.cast({__MODULE__, node}, {message, get_self_node()})
   end
 
@@ -145,7 +149,6 @@ defmodule Scnle.Node do
   end
 
   def handle_call(:get_leader, _from, %State{} = state) do
-    IO.inspect(state.leader, label: "state.leader")
     {:reply, state.leader, state}
   end
 
@@ -160,8 +163,6 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:PONG, sender}, %State{status: :idle, leader: sender} = state) do
-    schedule_ping_leader()
-
     {:noreply, state}
   end
 
@@ -195,22 +196,46 @@ defmodule Scnle.Node do
      }}
   end
 
-  defp schedule_ping_leader() do
-    Process.send_after(
-      self(),
-      :pind_leader,
-      @waiting_time_in_milli
-    )
+  def handle_info(
+        :tick,
+        %State{
+          status: :idle,
+          wait_until_start_election: wait_until_start_election
+        } = state
+      )
+      when not is_nil(wait_until_start_election) do
+    state =
+      case DateTime.compare(DateTime.utc_now(), wait_until_start_election) do
+        :gt ->
+          start_election(state)
+
+        _ ->
+          state
+      end
+
+    schedule_next_tick()
+
+    {:noreply, state}
   end
 
-  def handle_info(:ping_leader, state) do
+  def handle_info(
+        :tick,
+        %{
+          status: :idle
+        } = state
+      ) do
     send_message(state.leader, :PING)
+    schedule_next_tick()
 
     {:noreply,
      %{
        state
        | wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli * 4)
      }}
+  end
+
+  defp schedule_next_tick() do
+    Process.send_after(self(), :tick, @waiting_time_in_milli)
   end
 
   defp get_nodes_with_greater_id(node_id) do
@@ -220,9 +245,12 @@ defmodule Scnle.Node do
 
   # utilts
   def add_milli(%DateTime{} = dt, ms) do
-    dt
-    |> DateTime.to_unix(:milliseconds)
-    |> (&(&1 + ms)).()
-    |> DateTime.from_unix()
+    {:ok, result} =
+      dt
+      |> DateTime.to_unix(:milliseconds)
+      |> (&(&1 + ms)).()
+      |> DateTime.from_unix(:milliseconds)
+
+    result
   end
 end
