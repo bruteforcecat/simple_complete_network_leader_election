@@ -1,9 +1,0 @@
-{application,scnle,
-             [{applications,[kernel,stdlib,elixir,logger,local_cluster]},
-              {description,"scnle"},
-              {modules,['Elixir.Scnle','Elixir.Scnle.Application',
-                        'Elixir.Scnle.Leader','Elixir.Scnle.Node',
-                        'Elixir.Scnle.Node.State']},
-              {registered,[]},
-              {vsn,"0.1.0"},
-              {mod,{'Elixir.Scnle.Application',[]}}]}.

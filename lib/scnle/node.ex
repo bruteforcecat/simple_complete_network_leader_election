@@ -27,20 +27,27 @@ defmodule Scnle.Node do
     :follower
   end
 
-  @spec get_leader(node()) :: node() | nil
-  def get_leader(node) do
-    GenServer.call({__MODULE__, node}, :get_leader)
+  @spec get_leader() :: node() | nil
+  def get_leader() do
+    GenServer.call(__MODULE__, :get_leader)
   end
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-
-  @default_init_args %{get_self_node: &Node.self/0, get_node_list: &Node.list/0}
+  @default_init_args %{
+    get_self_node: &Node.self/0,
+    get_node_list: &Node.list/0
+  }
 
   def init(opts \\ []) do
-    %{get_self_node: get_self_node, get_node_list: get_node_list} = Enum.into(opts, @default_init_args)
+    %{get_self_node: get_self_node, get_node_list: get_node_list} =
+      Enum.into(opts, @default_init_args)
+
+    # It's bad practice to use Process Dictionary in general
+    # But this time I dun want to sacrifice the clarity of the state of GenServer for easier
+    # dependencies injection for testing
     Process.put(:get_self_node, get_self_node)
     Process.put(:get_node_list, get_node_list)
 

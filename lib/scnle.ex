@@ -11,7 +11,7 @@ defmodule Scnle do
 
   def is_leader_elected?(nodes) do
     nodes
-    |> Enum.map(&Node.get_leader/1)
+    |> Enum.map(&Node.get_leader/0)
     |> Enum.filter(&(&1 == nil))
     |> Enum.count()
     |> (&(&1 == 0)).()
