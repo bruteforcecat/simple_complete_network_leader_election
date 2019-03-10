@@ -18,15 +18,16 @@ defmodule Scnle.Node do
             | :waiting_iamking
 
     @enforce_keys [:wait_until_start_election, :status, :leader]
-    defstruct [:wait_until_start_election, :status, :leader, peers: []]
+    defstruct [:wait_until_start_election, :status, :leader]
 
     @type t :: %__MODULE__{
             wait_until_start_election: DateTime.t() | nil,
             status: node_status,
-            leader: node | nil,
-            peers: list(node())
+            leader: node | nil
           }
   end
+
+  # client
 
   @spec get_role(node()) :: node_role()
   def get_role(node) do
@@ -51,57 +52,6 @@ defmodule Scnle.Node do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  def init(_opts) do
-    peers = get_all_peers()
-    # notify_peers_join(peers)
-
-    schedule_next_tick()
-
-    state =
-      start_election(%State{
-        peers: peers,
-        wait_until_start_election: nil,
-        status: :idle,
-        leader: nil
-      })
-
-    {:ok, state}
-  end
-
-  defp get_all_peers() do
-    nodes = get_node_list()
-
-    nodes_result =
-      nodes
-      |> Enum.map(&Task.async(fn -> is_scnle_node?(&1) end))
-      |> Enum.map(fn pid ->
-        Task.await(pid, 5000)
-      end)
-
-    nodes
-    |> Enum.zip(nodes_result)
-    |> Enum.filter(&elem(&1, 1))
-    |> Enum.map(&elem(&1, 0))
-  end
-
-  defp is_scnle_node?(node) when is_atom(node) do
-    try do
-      GenServer.call({__MODULE__, node}, :is_scnle_node?)
-      # it catch exit caused by sending call to connected non-scnle node
-    catch
-      :exit, {:noproc, _} ->
-        false
-    end
-  end
-
-  defp get_self_node() do
-    Node.self()
-  end
-
-  defp get_node_list() do
-    Node.list()
-  end
-
   # assume all communication is async
   defp send_message(nodes, message) when is_list(nodes) do
     Enum.each(nodes, &send_message(&1, message))
@@ -115,33 +65,18 @@ defmodule Scnle.Node do
     GenServer.cast({__MODULE__, node}, {message, get_self_node()})
   end
 
-  defp start_election(state) do
-    nodes = get_nodes_with_greater_id(get_all_peers())
+  # server
+  def init(_opts) do
+    schedule_next_tick()
 
-    Logger.info("starting election")
+    state =
+      start_election(%State{
+        wait_until_start_election: nil,
+        status: :idle,
+        leader: nil
+      })
 
-    if nodes == [] do
-      claim_king(state)
-    else
-      Enum.each(nodes, &send_message(&1, :ALIVE?))
-
-      %{
-        state
-        | leader: nil,
-          status: :waiting_receive_alive,
-          wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli)
-      }
-    end
-  end
-
-  defp claim_king(%State{} = state) do
-    nodes = get_all_peers()
-    send_message(nodes, :IAMTHEKING)
-
-    %State{
-      state
-      | leader: get_self_node()
-    }
+    {:ok, state}
   end
 
   def handle_call(:get_leader, _from, %State{} = state) do
@@ -248,6 +183,69 @@ defmodule Scnle.Node do
     schedule_next_tick()
 
     {:noreply, new_state}
+  end
+
+  defp start_election(state) do
+    nodes = get_nodes_with_greater_id(get_all_peers())
+
+    Logger.info("starting election")
+
+    if nodes == [] do
+      claim_king(state)
+    else
+      Enum.each(nodes, &send_message(&1, :ALIVE?))
+
+      %{
+        state
+        | leader: nil,
+          status: :waiting_receive_alive,
+          wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli)
+      }
+    end
+  end
+
+  defp claim_king(%State{} = state) do
+    nodes = get_all_peers()
+    send_message(nodes, :IAMTHEKING)
+
+    %State{
+      state
+      | leader: get_self_node()
+    }
+  end
+
+  defp get_all_peers() do
+    nodes = get_node_list()
+
+    nodes_result =
+      nodes
+      |> Enum.map(&Task.async(fn -> is_scnle_node?(&1) end))
+      |> Enum.map(fn pid ->
+        Task.await(pid, 5000)
+      end)
+
+    nodes
+    |> Enum.zip(nodes_result)
+    |> Enum.filter(&elem(&1, 1))
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp is_scnle_node?(node) when is_atom(node) do
+    try do
+      GenServer.call({__MODULE__, node}, :is_scnle_node?)
+      # it catch exit caused by sending call to connected non-scnle node
+    catch
+      :exit, {:noproc, _} ->
+        false
+    end
+  end
+
+  defp get_self_node() do
+    Node.self()
+  end
+
+  defp get_node_list() do
+    Node.list()
   end
 
   defp schedule_next_tick() do
