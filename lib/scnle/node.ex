@@ -42,6 +42,11 @@ defmodule Scnle.Node do
     GenServer.call({__MODULE__, node}, :get_leader)
   end
 
+  @spec get_status(node()) :: node() | nil
+  def get_status(node \\ Node.self()) do
+    GenServer.call({__MODULE__, node}, :get_status)
+  end
+
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
@@ -141,6 +146,10 @@ defmodule Scnle.Node do
 
   def handle_call(:get_leader, _from, %State{} = state) do
     {:reply, state.leader, state}
+  end
+
+  def handle_call(:get_status, _from, %State{} = state) do
+    {:reply, state.status, state}
   end
 
   def handle_call(:is_scnle_node?, _from, %State{} = state) do

@@ -5,6 +5,7 @@ defmodule Scnle do
 
   defdelegate get_role(node), to: Scnle.Node
   defdelegate get_leader(node), to: Scnle.Node
+  defdelegate get_status(node), to: Scnle.Node
 
   @spec is_leader_elected?(list(node)) :: boolean()
   def is_leader_elected?(nodes) do
