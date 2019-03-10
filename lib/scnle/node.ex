@@ -4,7 +4,7 @@ defmodule Scnle.Node do
 
   use GenServer
 
-  @waiting_time_in_milli 2000
+  @waiting_time_in_milli 500
   @type node_role() :: :leader | :follower
 
   defmodule State do
@@ -23,14 +23,18 @@ defmodule Scnle.Node do
           }
   end
 
-  @spec get_status(pid()) :: State.node_status()
-  def get_status(_node) do
-    :follower
+  @spec get_role(node()) :: State.node_status()
+  def get_role(node) do
+    if node != nil and get_leader(node) == node do
+      :leader
+    else
+      :follower
+    end
   end
 
-  @spec get_leader() :: node() | nil
-  def get_leader() do
-    GenServer.call(__MODULE__, :get_leader)
+  @spec get_leader(node()) :: node() | nil
+  def get_leader(node \\ Node.self()) do
+    GenServer.call({ __MODULE__, node}, :get_leader)
   end
 
   def start_link(opts \\ []) do
@@ -89,7 +93,7 @@ defmodule Scnle.Node do
   defp is_scnle_node?(node) when is_atom(node) do
     try do
       GenServer.call({__MODULE__, node}, :is_scnle_node?)
-    # it catch exit caused by sending call to connected non-scnle node
+      # it catch exit caused by sending call to connected non-scnle node
     catch
       :exit, {:noproc, _} ->
         false

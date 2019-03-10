@@ -9,6 +9,8 @@ defmodule Scnle do
     node
   end
 
+  defdelegate get_role(node), to: Scnle.Node
+
   def is_leader_elected?(nodes) do
     nodes
     |> Enum.map(&Node.get_leader/0)
