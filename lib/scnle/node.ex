@@ -5,27 +5,13 @@ defmodule Scnle.Node do
   use GenServer
   require Logger
 
-  @waiting_time_in_milli 1000
+  alias Scnle.State
+
+  @ping_interval 1000
+  @pong_receive_threshold @ping_interval * 4
+  @alive_receive_threshold @ping_interval
+  @tick_interval 100
   @type node_role() :: :leader | :follower
-
-  defmodule State do
-    # TODO better naming
-    @type node_status() ::
-            :idle
-            | :waiting_receive_pong
-            | :waiting_receive_alive
-            | :waiting_receive_finethanks
-            | :waiting_iamking
-
-    @enforce_keys [:wait_until_start_election, :status, :leader]
-    defstruct [:wait_until_start_election, :status, :leader]
-
-    @type t :: %__MODULE__{
-            wait_until_start_election: DateTime.t() | nil,
-            status: node_status,
-            leader: node | nil
-          }
-  end
 
   # client
 
@@ -69,12 +55,7 @@ defmodule Scnle.Node do
   def init(_opts) do
     schedule_next_tick()
 
-    state =
-      start_election(%State{
-        wait_until_start_election: nil,
-        status: :idle,
-        leader: nil
-      })
+    state = start_election(State.new())
 
     {:ok, state}
   end
@@ -124,7 +105,7 @@ defmodule Scnle.Node do
      %{
        state
        | status: :waiting_receive_finethanks,
-         wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli)
+         wait_until_start_election: add_milli(DateTime.utc_now(), @ping_interval)
      }}
   end
 
@@ -145,6 +126,7 @@ defmodule Scnle.Node do
         } = state
       )
       when not is_nil(wait_until_start_election) do
+
     state =
       case DateTime.compare(DateTime.utc_now(), wait_until_start_election) do
         :gt ->
@@ -161,23 +143,37 @@ defmodule Scnle.Node do
 
   def handle_info(
         :tick,
-        %{
+        %State{
           status: status,
           leader: leader
         } = state
       )
       when status in [:idle, :waiting_receive_pong] do
-    new_state =
-      if Node.self() == leader do
-        state
-      else
-        send_message(state.leader, :PING)
 
-        %{
+    new_state =
+      case Node.self() do
+        ^leader ->
           state
-          | status: :waiting_receive_pong,
-            wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli * 4)
-        }
+
+        _ ->
+          now = DateTime.utc_now()
+
+          if state.last_ping_at == nil or
+               DateTime.compare(now, add_milli(state.last_ping_at, @ping_interval)) == :gt do
+            send_message(state.leader, :PING)
+
+            %{
+              state
+              | status: :waiting_receive_pong,
+                last_ping_at: now
+            }
+            |> case do
+              %State{wait_until_start_election: nil} = state ->
+                %State{state | wait_until_start_election: add_milli(now, @pong_receive_threshold)}
+            end
+          else
+            state
+          end
       end
 
     schedule_next_tick()
@@ -185,10 +181,14 @@ defmodule Scnle.Node do
     {:noreply, new_state}
   end
 
+  # defp handle_tick(%State{leader:} = state, current_node) do
+
+  # end
+
   defp start_election(state) do
     nodes = get_nodes_with_greater_id(get_all_peers())
 
-    Logger.info("starting election")
+    Logger.info("Node #{Node.self()} starting election")
 
     if nodes == [] do
       claim_king(state)
@@ -199,7 +199,7 @@ defmodule Scnle.Node do
         state
         | leader: nil,
           status: :waiting_receive_alive,
-          wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli)
+          wait_until_start_election: add_milli(DateTime.utc_now(), @alive_receive_threshold)
       }
     end
   end
@@ -249,7 +249,7 @@ defmodule Scnle.Node do
   end
 
   defp schedule_next_tick() do
-    Process.send_after(self(), :tick, @waiting_time_in_milli)
+    Process.send_after(self(), :tick, @tick_interval)
   end
 
   defp get_nodes_with_greater_id(node_id) do

@@ -1,6 +1,7 @@
 defmodule Scnle.Leader do
   @moduledoc """
   Behaviour for modules that care about leader functions
+  Not used for now but will be used for master-slaves pattern later
   """
 
   @doc """
