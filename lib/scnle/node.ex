@@ -86,7 +86,8 @@ defmodule Scnle.Node do
         Task.await(pid, 5000)
       end)
 
-    Enum.zip(nodes, nodes_result)
+    nodes
+    |> Enum.zip(nodes_result)
     |> Enum.filter(&elem(&1, 1))
     |> Enum.map(&elem(&1, 0))
   end
