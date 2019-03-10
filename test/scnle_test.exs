@@ -2,10 +2,13 @@ defmodule ScnleTest do
   use ExUnit.Case
   doctest Scnle
 
-  test "the first node will be leader" do
-    num_process = Process.list() |> Enum.count()
+  setup do
+    nodes = ScnleTest.Cluster.spawn("my-cluster", 1)
+    {:ok, nodes: nodes}
+  end
 
-    nodes = Node.list()
+  test "the first node will be leader", %{nodes: nodes} do
+    num_process = Process.list() |> Enum.count()
 
     [node1] = nodes
 
@@ -16,8 +19,6 @@ defmodule ScnleTest do
 
     :timer.sleep(3000)
     result = :rpc.block_call(node1, Scnle.Node, :get_leader, [])
-    IO.inspect result, label: "result"
     assert result === node1
   end
-
 end
