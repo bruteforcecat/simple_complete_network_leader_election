@@ -13,12 +13,13 @@ defmodule Scnle.Node do
             :idle | :waiting_receive_alive | :waiting_receive_finethanks | :waiting_iamking
 
     @enforce_keys [:wait_until_start_election, :status, :leader]
-    defstruct [:wait_until_start_election, :status, :leader]
+    defstruct [:wait_until_start_election, :status, :leader, peers: []]
 
     @type t :: %__MODULE__{
             wait_until_start_election: DateTime.t() | nil,
             status: node_status,
-            leader: node | nil
+            leader: node | nil,
+            peers: list(node())
           }
   end
 
@@ -41,6 +42,10 @@ defmodule Scnle.Node do
     get_node_list: &Node.list/0
   }
 
+  @spec init(
+          get_self_node: (() -> node()),
+          get_node_list: (() -> list(node()))
+        ) :: {:ok, State.t()}
   def init(opts \\ []) do
     %{get_self_node: get_self_node, get_node_list: get_node_list} =
       Enum.into(opts, @default_init_args)
@@ -51,14 +56,44 @@ defmodule Scnle.Node do
     Process.put(:get_self_node, get_self_node)
     Process.put(:get_node_list, get_node_list)
 
+    peers = get_all_peers()
+    # notify_peers_join(peers)
+    IO.inspect(peers, label: "peers")
+
     state =
       start_election(%State{
+        peers: peers,
         wait_until_start_election: nil,
         status: :idle,
         leader: nil
       })
 
     {:ok, state}
+  end
+
+  defp get_all_peers() do
+    nodes = get_node_list()
+
+    nodes_result =
+      nodes
+      |> Enum.map(&Task.async(fn -> is_scnle_node?(&1) end))
+      |> Enum.map(fn pid ->
+        Task.await(pid, 5000)
+      end)
+
+    Enum.zip(nodes, nodes_result)
+    |> Enum.filter(&elem(&1, 1))
+    |> Enum.map(&elem(&1, 0))
+  end
+
+  defp is_scnle_node?(node) when is_atom(node) do
+    try do
+      GenServer.call({__MODULE__, node}, :is_scnle_node?)
+    # it catch exit caused by sending call to connected non-scnle node
+    catch
+      :exit, {:noproc, _} ->
+        false
+    end
   end
 
   defp get_self_node() do
@@ -79,9 +114,8 @@ defmodule Scnle.Node do
   end
 
   defp start_election(state) do
-    nodes = get_nodes_with_greater_id(get_self_node())
+    nodes = get_nodes_with_greater_id(state.peers)
     IO.puts("starting election")
-    IO.inspect(nodes, label: "nodes")
 
     if nodes == [] do
       claim_king(state)
@@ -98,7 +132,7 @@ defmodule Scnle.Node do
   end
 
   defp claim_king(%State{} = state) do
-    send_message(get_node_list(), :IAMTHEKING)
+    send_message(state.peers, :IAMTHEKING)
 
     %State{
       state
@@ -107,7 +141,12 @@ defmodule Scnle.Node do
   end
 
   def handle_call(:get_leader, _from, %State{} = state) do
+    IO.inspect(state.leader, label: "state.leader")
     {:reply, state.leader, state}
+  end
+
+  def handle_call(:is_scnle_node?, _from, %State{} = state) do
+    {:reply, true, state}
   end
 
   def handle_cast({:PING, sender}, %State{} = state) do
