@@ -5,13 +5,17 @@ defmodule Scnle.Node do
   use GenServer
   require Logger
 
-  @waiting_time_in_milli 500
+  @waiting_time_in_milli 1000
   @type node_role() :: :leader | :follower
 
   defmodule State do
     # TODO better naming
     @type node_status() ::
-            :idle | :waiting_receive_alive | :waiting_receive_finethanks | :waiting_iamking
+            :idle
+            | :waiting_receive_pong
+            | :waiting_receive_alive
+            | :waiting_receive_finethanks
+            | :waiting_iamking
 
     @enforce_keys [:wait_until_start_election, :status, :leader]
     defstruct [:wait_until_start_election, :status, :leader, peers: []]
@@ -42,25 +46,7 @@ defmodule Scnle.Node do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @default_init_args %{
-    get_self_node: &Node.self/0,
-    get_node_list: &Node.list/0
-  }
-
-  @spec init(
-          get_self_node: (() -> node()),
-          get_node_list: (() -> list(node()))
-        ) :: {:ok, State.t()}
-  def init(opts \\ []) do
-    %{get_self_node: get_self_node, get_node_list: get_node_list} =
-      Enum.into(opts, @default_init_args)
-
-    # It's bad practice to use Process Dictionary in general
-    # But this time I dun want to sacrifice the clarity of the state of GenServer for easier
-    # dependencies injection for testing
-    Process.put(:get_self_node, get_self_node)
-    Process.put(:get_node_list, get_node_list)
-
+  def init(_opts) do
     peers = get_all_peers()
     # notify_peers_join(peers)
 
@@ -104,11 +90,11 @@ defmodule Scnle.Node do
   end
 
   defp get_self_node() do
-    Process.get(:get_self_node).()
+    Node.self()
   end
 
   defp get_node_list() do
-    Process.get(:get_node_list).()
+    Node.list()
   end
 
   # assume all communication is async
@@ -117,12 +103,16 @@ defmodule Scnle.Node do
   end
 
   defp send_message(node, message) when is_atom(node) do
-    Logger.info("Node #{inspect(node)} : send_message #{inspect(message)}")
+    Logger.info(
+      "Node #{Node.self()} send to Node #{inspect(node)} : send_message #{inspect(message)}"
+    )
+
     GenServer.cast({__MODULE__, node}, {message, get_self_node()})
   end
 
   defp start_election(state) do
-    nodes = get_nodes_with_greater_id(state.peers)
+    nodes = get_nodes_with_greater_id(get_all_peers())
+
     Logger.info("starting election")
 
     if nodes == [] do
@@ -140,7 +130,10 @@ defmodule Scnle.Node do
   end
 
   defp claim_king(%State{} = state) do
-    send_message(state.peers, :IAMTHEKING)
+    nodes = get_all_peers()
+    IO.inspect nodes, label: "tell them all I am king"
+    IO.inspect Node.list(), label: "Node.list()"
+    send_message(nodes, :IAMTHEKING)
 
     %State{
       state
@@ -162,13 +155,13 @@ defmodule Scnle.Node do
     {:noreply, state}
   end
 
-  def handle_cast({:PONG, sender}, %State{status: :idle, leader: sender} = state) do
-    {:noreply, state}
+  def handle_cast({:PONG, sender}, %State{status: :waiting_receive_pong, leader: sender} = state) do
+    {:noreply, %{state | wait_until_start_election: nil}}
   end
 
   # This happen when the leader in the current node view change after the previous ping send
   # we will just ignore it
-  def handle_cast({:PONG, sender1}, %State{status: :idle, leader: sender2} = state) do
+  def handle_cast({:PONG, _sender}, %State{status: _, leader: _leader} = state) do
     {:noreply, state}
   end
 
@@ -194,6 +187,7 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:IAMTHEKING, sender}, %State{} = state) do
+    IO.inspect "receive I am the kind"
     {:noreply,
      %{
        state
@@ -205,7 +199,7 @@ defmodule Scnle.Node do
   def handle_info(
         :tick,
         %State{
-          status: :idle,
+          # status: :idle,
           wait_until_start_election: wait_until_start_election
         } = state
       )
@@ -227,17 +221,27 @@ defmodule Scnle.Node do
   def handle_info(
         :tick,
         %{
-          status: :idle
+          status: status,
+          leader: leader
         } = state
-      ) do
-    send_message(state.leader, :PING)
+      )
+      when status in [:idle, :waiting_receive_pong] do
+    new_state =
+      if Node.self() == leader do
+        state
+      else
+        send_message(state.leader, :PING)
+
+        %{
+          state
+          | status: :waiting_receive_pong,
+            wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli * 4)
+        }
+      end
+
     schedule_next_tick()
 
-    {:noreply,
-     %{
-       state
-       | wait_until_start_election: add_milli(DateTime.utc_now(), @waiting_time_in_milli * 4)
-     }}
+    {:noreply, new_state}
   end
 
   defp schedule_next_tick() do

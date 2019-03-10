@@ -6,12 +6,8 @@ defmodule Scnle.Application do
   use Application
 
   def start(_type, _args) do
-    # List all child processes to be superviseda
-    initial_peer = Application.get_env(:scnle, :initial_peer)
+    :net_adm.world()
 
-    if initial_peer !== nil do
-      initial_peer |> String.to_atom() |> Node.connect()
-    end
     children = [
       %{
         id: Scnle.Node,

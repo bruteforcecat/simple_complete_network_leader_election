@@ -28,4 +28,4 @@ use Mix.Config
 # here (which is why it is important to import them last).
 #
 #     import_config "#{Mix.env()}.exs"
-config :scnle, initial_peer: System.get_env("INITIAL_PEER")
+# config :scnle, initial_peer: System.get_env("INITIAL_PEER")
