@@ -3,6 +3,7 @@ defmodule Scnle.Node do
   """
 
   use GenServer
+  require Logger
 
   @waiting_time_in_milli 500
   @type node_role() :: :leader | :follower
@@ -116,13 +117,13 @@ defmodule Scnle.Node do
   end
 
   defp send_message(node, message) when is_atom(node) do
-    IO.puts("Node #{inspect(node)} : send_message #{inspect(message)}")
+    Logger.info("Node #{inspect(node)} : send_message #{inspect(message)}")
     GenServer.cast({__MODULE__, node}, {message, get_self_node()})
   end
 
   defp start_election(state) do
     nodes = get_nodes_with_greater_id(state.peers)
-    IO.puts("starting election")
+    Logger.info("starting election")
 
     if nodes == [] do
       claim_king(state)

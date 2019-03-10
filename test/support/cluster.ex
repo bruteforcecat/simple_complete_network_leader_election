@@ -27,7 +27,6 @@ defmodule ScnleTest.Cluster do
   end
 
   def spawn_new_node() do
-    IO.inspect(Node.list(), label: "Node.list()")
     node_host = get_node_host(Enum.count(Node.list()) + 1)
     spawn_node(node_host)
   end
@@ -68,7 +67,6 @@ defmodule ScnleTest.Cluster do
   end
 
   defp add_code_paths(node) do
-    IO.inspect(node, label: "node")
     rpc(node, :code, :add_paths, [:code.get_path()])
   end
 

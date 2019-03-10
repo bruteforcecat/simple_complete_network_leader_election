@@ -12,58 +12,55 @@ defmodule ScnleTest do
     {:ok, nodes: nodes}
   end
 
-  # test "the first node will be leader", %{nodes: nodes} do
-  #   num_process = Process.list() |> Enum.count()
+  test "the first node will be leader", %{nodes: nodes} do
+    num_process = Process.list() |> Enum.count()
 
-  #   [node1] = nodes
+    [node1] = nodes
 
-  #   get_node_list = fn -> nodes end
-  #   get_self_node = fn -> node1 end
+    Node.spawn_link(node1, Scnle.Node, :start_link, [])
+    :timer.sleep(100)
 
-  #   Node.spawn_link(node1, Scnle.Node, :start_link, [])
-  #   :timer.sleep(100)
+    wait_until_leader_elected([node1])
+    result = call_node(node1, Scnle.Node, :get_leader, [])
+    assert result == node1
+  end
 
-  #   wait_until_leader_elected([node1])
-  #   result = call_node(node1, Scnle.Node, :get_leader, [])
-  #   assert result == node1
-  # end
+  test "join an existing cluster with leader will cause election", %{nodes: [node1]} do
+    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
 
-  # test "join an existing cluster with leader will cause election", %{nodes: [node1]} do
-  #   {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
+    Node.spawn_link(node1, Scnle.Node, :start_link, [])
+    :timer.sleep(100)
+    wait_until_leader_elected([node1])
+    # Node.spawn_link(node2, Scnle.Node, :start_link, [])
+    call_node(node2, Scnle.Node, :start_link, [])
+    # :timer.sleep(100)
+    wait_until_leader_elected([node1, node2])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node2
+    assert call_node(node2, Scnle.Node, :get_leader, []) == node2
+  end
 
-  #   Node.spawn_link(node1, Scnle.Node, :start_link, [])
-  #   :timer.sleep(100)
-  #   wait_until_leader_elected([node1])
-  #   # Node.spawn_link(node2, Scnle.Node, :start_link, [])
-  #   call_node(node2, Scnle.Node, :start_link, [])
-  #   # :timer.sleep(100)
-  #   wait_until_leader_elected([node1, node2])
-  #   assert call_node(node1, Scnle.Node, :get_leader, []) == node2
-  #   assert call_node(node2, Scnle.Node, :get_leader, []) == node2
-  # end
+  test "join an existing cluster without leader will cause election", %{nodes: [node1]} do
+    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
 
-  # test "join an existing cluster without leader will cause election", %{nodes: [node1]} do
-  #   {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
+    call_node(node1, Scnle.Node, :start_link, [])
+    call_node(node2, Scnle.Node, :start_link, [])
+    wait_until_leader_elected([node1, node2])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node2
+    assert call_node(node2, Scnle.Node, :get_leader, []) == node2
+  end
 
-  #   call_node(node1, Scnle.Node, :start_link, [])
-  #   call_node(node2, Scnle.Node, :start_link, [])
-  #   wait_until_leader_elected([node1, node2])
-  #   assert call_node(node1, Scnle.Node, :get_leader, []) == node2
-  #   assert call_node(node2, Scnle.Node, :get_leader, []) == node2
-  # end
+  test "leader leave will cause election", %{nodes: [node1]} do
+    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
+    call_node(node1, Scnle.Node, :start_link, [])
+    call_node(node2, Scnle.Node, :start_link, [])
+    wait_until_leader_elected([node1, node2])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node2
+    assert call_node(node2, Scnle.Node, :get_leader, []) == node2
 
-  # test "leader leave will cause election", %{nodes: [node1]} do
-  #   {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
-  #   call_node(node1, Scnle.Node, :start_link, [])
-  #   call_node(node2, Scnle.Node, :start_link, [])
-  #   wait_until_leader_elected([node1, node2])
-  #   assert call_node(node1, Scnle.Node, :get_leader, []) == node2
-  #   assert call_node(node2, Scnle.Node, :get_leader, []) == node2
-
-  #   stop_node(node2)
-  #   wait_until_leader_elected([node1])
-  #   assert call_node(node1, Scnle.Node, :get_leader, []) == node1
-  # end
+    stop_node(node2)
+    wait_until_leader_elected([node1])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node1
+  end
 
   test "cluster with 20 nodes" do
     ScnleTest.Cluster.stop()
