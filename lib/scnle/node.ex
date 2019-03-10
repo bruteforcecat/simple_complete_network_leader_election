@@ -131,8 +131,6 @@ defmodule Scnle.Node do
 
   defp claim_king(%State{} = state) do
     nodes = get_all_peers()
-    IO.inspect nodes, label: "tell them all I am king"
-    IO.inspect Node.list(), label: "Node.list()"
     send_message(nodes, :IAMTHEKING)
 
     %State{
@@ -187,7 +185,6 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:IAMTHEKING, sender}, %State{} = state) do
-    IO.inspect "receive I am the kind"
     {:noreply,
      %{
        state

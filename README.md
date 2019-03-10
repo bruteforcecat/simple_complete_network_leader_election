@@ -22,3 +22,14 @@ $iex --name node_3@127.0.0.1 -S mix
 # might take a bit time(20s in my 2015 macbook) as one of the test is spawning 20 node in local cluster
 mix test
 ```
+
+## Development
+
+```bash
+# Run Credo
+$mix credo
+
+# Run Dialyzer
+$mix dialyzer
+
+```
