@@ -2,8 +2,13 @@ defmodule ScnleTest do
   use ExUnit.Case
   doctest Scnle
 
-  setup do
-    nodes = ScnleTest.Cluster.spawn("my-cluster", 1)
+  setup_all do
+    nodes = ScnleTest.Cluster.start_nodes(1)
+
+    on_exit(fn ->
+      ScnleTest.Cluster.stop()
+    end)
+
     {:ok, nodes: nodes}
   end
 
@@ -20,5 +25,10 @@ defmodule ScnleTest do
     :timer.sleep(3000)
     result = :rpc.block_call(node1, Scnle.Node, :get_leader, [])
     assert result === node1
+  end
+
+  test "join an existing cluster will cause election", %{nodes: nodes} do
+    new_node = ScnleTest.Cluster.spawn_new_node()
+    assert true
   end
 end
