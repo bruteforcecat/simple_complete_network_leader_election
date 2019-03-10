@@ -6,9 +6,12 @@ defmodule Scnle.Application do
   use Application
 
   def start(_type, _args) do
-    :net_adm.world()
-
     children = [
+      %{
+        id: Scnle.AutoCluster,
+        start: {Scnle.AutoCluster, :start_link, []},
+        type: :worker
+      },
       %{
         id: Scnle.Node,
         start: {Scnle.Node, :start_link, []},

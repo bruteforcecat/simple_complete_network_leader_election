@@ -13,8 +13,6 @@ defmodule ScnleTest do
   end
 
   test "the first node will be leader", %{nodes: nodes} do
-    num_process = Process.list() |> Enum.count()
-
     [node1] = nodes
 
     Node.spawn_link(node1, Scnle.Node, :start_link, [])
