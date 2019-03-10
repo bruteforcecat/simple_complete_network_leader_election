@@ -62,7 +62,6 @@ defmodule Scnle.Node do
 
     peers = get_all_peers()
     # notify_peers_join(peers)
-    IO.inspect(peers, label: "peers")
 
     schedule_next_tick()
 
@@ -116,8 +115,7 @@ defmodule Scnle.Node do
   end
 
   defp send_message(node, message) when is_atom(node) do
-    IO.inspect(message, label: "message:")
-    IO.inspect(node, label: "node:")
+    IO.puts("Node #{inspect(node)} : send_message #{inspect(message)}")
     GenServer.cast({__MODULE__, node}, {message, get_self_node()})
   end
 
@@ -163,6 +161,12 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:PONG, sender}, %State{status: :idle, leader: sender} = state) do
+    {:noreply, state}
+  end
+
+  # This happen when the leader in the current node view change after the previous ping send
+  # we will just ignore it
+  def handle_cast({:PONG, sender1}, %State{status: :idle, leader: sender2} = state) do
     {:noreply, state}
   end
 
