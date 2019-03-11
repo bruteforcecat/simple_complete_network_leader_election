@@ -1,11 +1,12 @@
 defmodule Scnle.Node do
   @moduledoc """
+  The Node module handling leader election
   """
 
   use GenServer
   require Logger
 
-  alias Scnle.State
+  alias Scnle.{State, RPC, Network}
 
   @ping_interval 1000
   @pong_receive_threshold @ping_interval * 4
@@ -38,19 +39,6 @@ defmodule Scnle.Node do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  # assume all communication is async
-  defp send_message(nodes, message) when is_list(nodes) do
-    Enum.each(nodes, &send_message(&1, message))
-  end
-
-  defp send_message(node, message) when is_atom(node) do
-    Logger.info(
-      "Node #{Node.self()} send to Node #{inspect(node)} : send_message #{inspect(message)}"
-    )
-
-    GenServer.cast({__MODULE__, node}, {message, get_self_node()})
-  end
-
   # server
   def init(_opts) do
     schedule_next_tick()
@@ -73,7 +61,7 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:PING, sender}, %State{} = state) do
-    send_message(sender, :PONG)
+    RPC.send_message(sender, :PONG)
 
     {:noreply, state}
   end
@@ -89,9 +77,9 @@ defmodule Scnle.Node do
   end
 
   def handle_cast({:ALIVE?, sender}, %State{} = state) do
-    send_message(sender, :FINETHANKS)
+    RPC.send_message(sender, :FINETHANKS)
 
-    case get_nodes_with_greater_id(get_self_node()) do
+    case get_nodes_with_greater_id(Network.get_self_node()) do
       [] ->
         {:noreply, claim_king(state)}
 
@@ -153,7 +141,7 @@ defmodule Scnle.Node do
         _ ->
           if state.last_ping_at == nil or
                is_after_now?(add_milli(state.last_ping_at, @ping_interval)) do
-            send_message(state.leader, :PING)
+            RPC.send_message(state.leader, :PING)
             now = DateTime.utc_now()
 
             %{
@@ -183,7 +171,7 @@ defmodule Scnle.Node do
     if nodes == [] do
       claim_king(state)
     else
-      Enum.each(nodes, &send_message(&1, :ALIVE?))
+      Enum.each(nodes, &RPC.send_message(&1, :ALIVE?))
 
       %{
         state
@@ -196,16 +184,16 @@ defmodule Scnle.Node do
 
   defp claim_king(%State{} = state) do
     nodes = get_all_peers()
-    send_message(nodes, :IAMTHEKING)
+    RPC.send_message(nodes, :IAMTHEKING)
 
     %State{
       state
-      | leader: get_self_node()
+      | leader: Network.get_self_node()
     }
   end
 
   defp get_all_peers() do
-    nodes = get_node_list()
+    nodes = Network.get_node_list()
 
     nodes_result =
       nodes
@@ -230,20 +218,12 @@ defmodule Scnle.Node do
     end
   end
 
-  defp get_self_node() do
-    Node.self()
-  end
-
-  defp get_node_list() do
-    Node.list()
-  end
-
   defp schedule_next_tick() do
     Process.send_after(self(), :tick, @tick_interval)
   end
 
   defp get_nodes_with_greater_id(node_id) do
-    get_node_list()
+    Network.get_node_list()
     |> Enum.filter(&(&1 > node_id))
   end
 

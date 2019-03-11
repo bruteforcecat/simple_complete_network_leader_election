@@ -1,6 +1,7 @@
 # mainly copy from phoenix pubsub helper
 defmodule ScnleTest.Cluster do
   @cluster_prefix "scnel-test-cluster"
+
   def start_nodes(num_of_nodes) do
     # Turn node into a distributed node with the given long name
     :net_kernel.start([:"primary@127.0.0.1"])
