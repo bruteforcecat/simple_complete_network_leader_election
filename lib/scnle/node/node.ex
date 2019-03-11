@@ -183,12 +183,15 @@ defmodule Scnle.Node do
   end
 
   defp claim_king(%State{} = state) do
+    Logger.info("Node #{Node.self()} claim king")
     nodes = get_all_peers()
     RPC.send_message(nodes, :IAMTHEKING)
 
     %State{
       state
-      | leader: Network.get_self_node()
+      | leader: Network.get_self_node(),
+        status: :idle,
+        wait_until_start_election: nil
     }
   end
 

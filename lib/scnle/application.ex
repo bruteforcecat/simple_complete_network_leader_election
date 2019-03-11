@@ -13,8 +13,8 @@ defmodule Scnle.Application do
         type: :worker
       },
       %{
-        id: Scnle.Node,
-        start: {Scnle.Node, :start_link, []},
+        id: Scnle.NodeSupervisor,
+        start: {Scnle.NodeSupervisor, :start_link, []},
         type: :supervisor
       }
       # Starts a worker by calling: Scnle.Worker.start_link(arg)
