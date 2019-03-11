@@ -3,59 +3,44 @@ defmodule ScnleTest do
   doctest Scnle
 
   setup do
-    nodes = ScnleTest.Cluster.start_nodes(1)
+    ScnleTest.Cluster.start_cluster()
+    node1 = start_new_node()
 
     on_exit(fn ->
       ScnleTest.Cluster.stop()
     end)
 
-    {:ok, nodes: nodes}
+    {:ok, node1: node1}
   end
 
-  test "the first node will start with idle state", %{nodes: nodes} do
-    [node1] = nodes
-
-    call_node(node1, Scnle.Node, :start_link, [])
-
+  test "the first node will start with idle state", %{node1: node1} do
     assert Scnle.get_status(node1) == :idle
   end
 
-  test "the first node will be leader eventually", %{nodes: nodes} do
-    [node1] = nodes
-
-    call_node(node1, Scnle.Node, :start_link, [])
-
+  test "the first node will be leader eventually", %{node1: node1} do
     wait_until_leader_elected([node1])
     result = call_node(node1, Scnle.Node, :get_leader, [])
     assert Scnle.get_status(node1) == :idle
     assert result == node1
   end
 
-  test "join an existing cluster with leader will cause election", %{nodes: [node1]} do
-    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
-
-    call_node(node1, Scnle.Node, :start_link, [])
+  test "join an existing cluster with leader will cause election", %{node1: node1} do
     wait_until_leader_elected([node1])
-    call_node(node2, Scnle.Node, :start_link, [])
+    node2 = start_new_node()
     wait_until_leader_elected([node1, node2])
     assert call_node(node1, Scnle.Node, :get_leader, []) == node2
     assert call_node(node2, Scnle.Node, :get_leader, []) == node2
   end
 
-  test "join an existing cluster without leader will cause election", %{nodes: [node1]} do
-    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
-
-    call_node(node1, Scnle.Node, :start_link, [])
-    call_node(node2, Scnle.Node, :start_link, [])
+  test "join an existing cluster without leader will cause election", %{node1: node1} do
+    node2 = start_new_node()
     wait_until_leader_elected([node1, node2])
     assert call_node(node1, Scnle.Node, :get_leader, []) == node2
     assert call_node(node2, Scnle.Node, :get_leader, []) == node2
   end
 
-  test "leader leave will cause election", %{nodes: [node1]} do
-    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
-    call_node(node1, Scnle.Node, :start_link, [])
-    call_node(node2, Scnle.Node, :start_link, [])
+  test "leader leave will cause election", %{node1: node1} do
+    node2 = start_new_node()
     wait_until_leader_elected([node1, node2])
     assert call_node(node1, Scnle.Node, :get_leader, []) == node2
     assert call_node(node2, Scnle.Node, :get_leader, []) == node2
@@ -65,12 +50,9 @@ defmodule ScnleTest do
     assert call_node(node1, Scnle.Node, :get_leader, []) == node1
   end
 
-  test "follower leave will not cause a election", %{nodes: [node1]} do
-    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
-    {:ok, node3} = ScnleTest.Cluster.spawn_new_node()
-    call_node(node1, Scnle.Node, :start_link, [])
-    call_node(node2, Scnle.Node, :start_link, [])
-    call_node(node3, Scnle.Node, :start_link, [])
+  test "follower leave will not cause a election", %{node1: node1} do
+    node2 = start_new_node()
+    node3 = start_new_node()
     wait_until_leader_elected([node1, node2, node3])
     assert call_node(node1, Scnle.Node, :get_leader, []) == node3
     assert call_node(node2, Scnle.Node, :get_leader, []) == node3
@@ -116,5 +98,11 @@ defmodule ScnleTest do
       leader ->
         leader
     end
+  end
+
+  defp start_new_node() do
+    {:ok, node} = ScnleTest.Cluster.spawn_new_node()
+    call_node(node, Scnle.Node, :start_link, [])
+    node
   end
 end

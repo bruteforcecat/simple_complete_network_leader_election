@@ -2,13 +2,17 @@
 defmodule ScnleTest.Cluster do
   @cluster_prefix "scnel-test-cluster"
 
-  def start_nodes(num_of_nodes) do
+  def start_cluster() do
     # Turn node into a distributed node with the given long name
     :net_kernel.start([:"primary@127.0.0.1"])
 
     # Allow spawned nodes to fetch all code from this node
     :erl_boot_server.start([])
     allow_boot(to_charlist("127.0.0.1"))
+  end
+
+  def start_nodes(num_of_nodes) do
+    start_cluster()
 
     nodes =
       Enum.map(1..num_of_nodes, fn idx ->
@@ -33,8 +37,7 @@ defmodule ScnleTest.Cluster do
   end
 
   defp spawn_node(node_host) do
-    {:ok, node} =
-      :slave.start(to_charlist("127.0.0.1"), node_name(node_host), inet_loader_args())
+    {:ok, node} = :slave.start(to_charlist("127.0.0.1"), node_name(node_host), inet_loader_args())
 
     add_code_paths(node)
     transfer_configuration(node)
