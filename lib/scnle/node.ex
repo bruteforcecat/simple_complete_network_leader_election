@@ -121,19 +121,15 @@ defmodule Scnle.Node do
   def handle_info(
         :tick,
         %State{
-          # status: :idle,
           wait_until_start_election: wait_until_start_election
         } = state
       )
       when not is_nil(wait_until_start_election) do
-
     state =
-      case DateTime.compare(DateTime.utc_now(), wait_until_start_election) do
-        :gt ->
-          start_election(state)
-
-        _ ->
-          state
+      if is_after_now?(wait_until_start_election) do
+        start_election(state)
+      else
+        state
       end
 
     schedule_next_tick()
@@ -149,18 +145,16 @@ defmodule Scnle.Node do
         } = state
       )
       when status in [:idle, :waiting_receive_pong] do
-
     new_state =
       case Node.self() do
         ^leader ->
           state
 
         _ ->
-          now = DateTime.utc_now()
-
           if state.last_ping_at == nil or
-               DateTime.compare(now, add_milli(state.last_ping_at, @ping_interval)) == :gt do
+               is_after_now?(add_milli(state.last_ping_at, @ping_interval)) do
             send_message(state.leader, :PING)
+            now = DateTime.utc_now()
 
             %{
               state
@@ -180,10 +174,6 @@ defmodule Scnle.Node do
 
     {:noreply, new_state}
   end
-
-  # defp handle_tick(%State{leader:} = state, current_node) do
-
-  # end
 
   defp start_election(state) do
     nodes = get_nodes_with_greater_id(get_all_peers())
@@ -266,5 +256,9 @@ defmodule Scnle.Node do
       |> DateTime.from_unix(:milliseconds)
 
     result
+  end
+
+  defp is_after_now?(dt) do
+    DateTime.compare(DateTime.utc_now(), dt) == :gt
   end
 end
