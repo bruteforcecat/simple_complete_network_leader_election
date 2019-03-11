@@ -65,6 +65,23 @@ defmodule ScnleTest do
     assert call_node(node1, Scnle.Node, :get_leader, []) == node1
   end
 
+  test "follower leave will not cause a election", %{nodes: [node1]} do
+    {:ok, node2} = ScnleTest.Cluster.spawn_new_node()
+    {:ok, node3} = ScnleTest.Cluster.spawn_new_node()
+    call_node(node1, Scnle.Node, :start_link, [])
+    call_node(node2, Scnle.Node, :start_link, [])
+    call_node(node3, Scnle.Node, :start_link, [])
+    wait_until_leader_elected([node1, node2, node3])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node3
+    assert call_node(node2, Scnle.Node, :get_leader, []) == node3
+    assert call_node(node3, Scnle.Node, :get_leader, []) == node3
+
+    stop_node(node2)
+    wait_until_leader_elected([node1, node3])
+    assert call_node(node1, Scnle.Node, :get_leader, []) == node3
+    assert call_node(node3, Scnle.Node, :get_leader, []) == node3
+  end
+
   test "cluster with 20 nodes" do
     ScnleTest.Cluster.stop()
     nodes = ScnleTest.Cluster.start_nodes(20)
